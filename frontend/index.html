@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Lineage Agent - Dashboard</title>
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <script src="https://dagrejs.github.io/project/dagre-d3/latest/dagre-d3.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; background-color: #f0f2f5; color: #333; }
+        .upload-card { max-width: 950px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); margin-bottom: 20px; }
+        h2 { color: #007bff; margin-top: 0; }
+        .input-group { margin-bottom: 20px; padding: 20px; border: 2px dashed #cbd5e0; border-radius: 8px; text-align: center; background: #fafafa; }
+        .btn { background: #007bff; color: white; border: none; padding: 14px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; width: 100%; transition: background 0.2s; margin-top: 10px; }
+        .btn:hover { background: #0056b3; }
+        .btn:disabled { background: #a0aec0; cursor: not-allowed; }
+        
+        /* Toggle Styles */
+        .toggle-container { margin: 15px 0; display: flex; align-items: center; justify-content: center; gap: 10px; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .toggle-container input { width: 18px; height: 18px; cursor: pointer; }
+        .toggle-label { cursor: pointer; font-size: 0.95em; color: #4a5568; font-weight: 600; }
+
+        /* File List Styles */
+        #fileQueue { margin-top: 15px; display: none; text-align: left; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; }
+        .file-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid #edf2f7; font-size: 0.9em; }
+        .file-item:last-child { border-bottom: none; }
+        .remove-file { color: #e53e3e; font-weight: bold; cursor: pointer; border: none; background: none; font-size: 1.2em; }
+        .remove-file:hover { color: #c53030; }
+
+        /* File Analysis Card Styles */
+        .file-card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 15px; border-left: 5px solid #007bff; transition: transform 0.2s; }
+        .file-card:hover { transform: translateY(-2px); }
+        .file-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .file-name { font-weight: 600; font-size: 1.1em; color: #2d3748; margin: 0; }
+        .see-code-btn { background: #edf2f7; color: #2d3748; border: 1px solid #cbd5e0; padding: 6px 12px; border-radius: 4px; font-size: 0.85em; cursor: pointer; font-weight: 600; }
+        .see-code-btn:hover { background: #e2e8f0; color: #007bff; }
+        .file-summary { font-size: 0.95em; color: #4a5568; line-height: 1.5; margin-bottom: 10px; }
+        .op-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; margin-right: 5px; margin-bottom: 5px; }
+        .read-tag { background: #ebf8ff; color: #3182ce; }
+        .write-tag { background: #f0fff4; color: #38a169; }
+
+        /* Modal Styles */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); }
+        .modal-content { background: #fff; margin: 2% auto; width: 90%; max-width: 1100px; height: 85vh; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding: 20px; background: white; }
+        .close-modal { font-size: 28px; font-weight: bold; color: #a0aec0; cursor: pointer; }
+        
+        /* Code Viewer Styles */
+        .code-container { background: #1a202c; color: #e2e8f0; padding: 20px; flex-grow: 1; overflow-y: auto; font-family: 'Fira Code', 'Courier New', monospace; font-size: 14px; line-height: 1.6; }
+        .line { display: block; white-space: pre-wrap; padding: 0 10px; border-radius: 2px; }
+        .line-number { color: #4a5568; display: inline-block; width: 40px; text-align: right; margin-right: 20px; user-select: none; border-right: 1px solid #2d3748; padding-right: 10px; }
+        .hl-read { background: rgba(49, 130, 206, 0.25); border-left: 4px solid #3182ce; }
+        .hl-write { background: rgba(56, 161, 105, 0.25); border-left: 4px solid #38a169; }
+        
+        #viz-container { margin-top: 30px; border: 1px solid #e2e8f0; border-radius: 12px; background: white; display: none; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        svg { width: 100%; height: 600px; cursor: grab; background-color: #f7fafc; background-image: radial-gradient(#cbd5e0 1px, transparent 1px); background-size: 20px 20px; }
+        .node.file rect { fill: #3182ce; rx: 8; ry: 8; }
+        .node.table rect { fill: #38a169; rx: 12; ry: 12; }
+        .edgePath path { stroke: #a0aec0; fill: none; stroke-width: 2px; }
+        
+        .loading { color: #3182ce; font-weight: bold; margin-top: 15px; display: none; text-align: center; background: #ebf8ff; padding: 15px; border-radius: 8px; }
+        .completion-msg { margin-top: 30px; padding: 15px; background: #f0fff4; border: 1px solid #c6f6d5; border-radius: 8px; color: #2f855a; display: none; text-align: center; font-weight: bold; }
+        #results { margin-top: 25px; background: #1a202c; color: #48bb78; padding: 20px; border-radius: 8px; overflow-x: auto; display: none; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="upload-card">
+        <h2>🚀 Multi-Agent Data Lineage</h2>
+        <p class="helper-text">Add project folders or individual files. Graph is generated for all runs; Enhanced analysis is optional.</p>
+        
+        <div class="input-group">
+            <div style="display: flex; justify-content: center; gap: 20px;">
+                <label for="folderPicker" style="cursor:pointer; color:#007bff; font-weight: bold;">📁 Add Folder</label>
+                <input type="file" id="folderPicker" webkitdirectory directory multiple style="display: none;" onchange="addToQueue(this)">
+                
+                <label for="filePicker" style="cursor:pointer; color:#007bff; font-weight: bold;">📄 Add Single Files</label>
+                <input type="file" id="filePicker" multiple style="display: none;" onchange="addToQueue(this)">
+            </div>
+
+            <div id="fileQueue"></div>
+
+            <div class="toggle-container">
+                <input type="checkbox" id="enhancedAnalysis">
+                <label for="enhancedAnalysis" class="toggle-label">🚀 Enable Enhanced Analysis (Summaries & Highlighting)</label>
+            </div>
+
+            <button id="uploadBtn" class="btn" onclick="handleUpload()" disabled>Analyze 0 Files</button>
+        </div>
+
+        <div id="loadingStatus" class="loading">
+            <span id="statusText">⏳ Processing Multi-Agent Workflow...</span><br>
+            <span id="timerText" style="font-weight: normal; font-size: 0.85em;"></span>
+        </div>
+        <div id="completionStatus" class="completion-msg"></div>
+    </div>
+
+    <div id="project-summary-card" class="upload-card" style="display: none; border-top: 6px solid #007bff;">
+        <h3>📋 Project Overview</h3>
+        <p id="project-summary-text" style="line-height: 1.6;"></p>
+    </div>
+
+    <div id="file-analysis-container" style="max-width: 950px; margin: auto; display: none;">
+        <h3>📁 File Analysis</h3>
+        <div id="file-list"></div>
+    </div>
+
+    <div id="viz-container" class="upload-card">
+        <div style="padding: 10px; color: #718096; background: #f7fafc; border-bottom: 1px solid #e2e8f0; font-size: 0.9em;">🖱️ Drag canvas to Pan | Scroll to Zoom</div>
+        <svg id="svg-canvas"><g/></svg>
+    </div>
+
+    <pre id="results"></pre>
+
+    <div id="codeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalFilename" style="margin:0;"></h3>
+                <span class="close-modal" onclick="closeModal()">&times;</span>
+            </div>
+            <div id="codeViewer" class="code-container"></div>
+        </div>
+    </div>
+
+    <script>
+        let fileQueue = [];
+        let globalData = null;
+        let timerInterval = null;
+
+        function addToQueue(input) {
+            const files = Array.from(input.files);
+            files.forEach(file => {
+                // Prevent duplicates based on name and size
+                if (!fileQueue.some(f => f.name === file.name && f.size === file.size)) {
+                    fileQueue.push(file);
+                }
+            });
+            updateQueueUI();
+            input.value = ""; // Reset input so same file can be added again if removed
+        }
+
+        function removeFile(index) {
+            fileQueue.splice(index, 1);
+            updateQueueUI();
+        }
+
+        function updateQueueUI() {
+            const queueDiv = document.getElementById('fileQueue');
+            const btn = document.getElementById('uploadBtn');
+            
+            if (fileQueue.length === 0) {
+                queueDiv.style.display = 'none';
+                btn.disabled = true;
+                btn.innerText = `Analyze 0 Files`;
+                return;
+            }
+
+            queueDiv.style.display = 'block';
+            btn.disabled = false;
+            btn.innerText = `Analyze ${fileQueue.length} Files`;
+            
+            queueDiv.innerHTML = fileQueue.map((f, index) => `
+                <div class="file-item">
+                    <span>📄 ${f.name} <small>(${(f.size / 1024).toFixed(1)} KB)</small></span>
+                    <button class="remove-file" onclick="removeFile(${index})" title="Remove file">&times;</button>
+                </div>
+            `).join('');
+        }
+
+        async function handleUpload() {
+            const btn = document.getElementById('uploadBtn');
+            const loading = document.getElementById('loadingStatus');
+            const timerText = document.getElementById('timerText');
+            const completionMsg = document.getElementById('completionStatus');
+            const enhanced = document.getElementById('enhancedAnalysis').checked;
+            
+            btn.disabled = true;
+            loading.style.display = 'block';
+            completionMsg.style.display = 'none';
+            document.getElementById('project-summary-card').style.display = 'none';
+            document.getElementById('file-analysis-container').style.display = 'none';
+            document.getElementById('viz-container').style.display = 'none';
+            document.getElementById('results').style.display = 'none';
+            
+            let start = Date.now();
+            timerInterval = setInterval(() => {
+                timerText.innerText = `Elapsed: ${Math.round((Date.now() - start)/1000)}s`;
+            }, 1000);
+
+            const formData = new FormData();
+            fileQueue.forEach(f => formData.append("files", f));
+
+            try {
+                // Pass the enhanced flag as a query parameter
+                const res = await fetch(`http://127.0.0.1:8000/analyze/scala?enhanced=${enhanced}`, { 
+                    method: "POST", 
+                    body: formData 
+                });
+                const { job_id } = await res.json();
+                pollStatus(job_id, start);
+            } catch (e) { 
+                clearInterval(timerInterval);
+                loading.style.display = 'none';
+                btn.disabled = false;
+                alert("Upload failed.");
+            }
+        }
+
+        async function pollStatus(job_id, start) {
+            const poll = setInterval(async () => {
+                try {
+                    const res = await fetch(`http://127.0.0.1:8000/status/${job_id}`);
+                    const data = await res.json();
+                    
+                    if (data.status === "completed") {
+                        clearInterval(poll);
+                        clearInterval(timerInterval);
+                        globalData = data;
+                        
+                        const totalTime = Math.round((Date.now() - start)/1000);
+                        const comp = document.getElementById('completionStatus');
+                        comp.innerHTML = `✅ Analysis Completed! <br> ⏱️ Total Time: ${totalTime} seconds`;
+                        comp.style.display = 'block';
+                        
+                        renderUI(data);
+                    } else if (data.status === "failed") {
+                        clearInterval(poll);
+                        clearInterval(timerInterval);
+                        document.getElementById('loadingStatus').style.display = 'none';
+                        document.getElementById('uploadBtn').disabled = false;
+                        alert("Analysis failed: " + (data.error || "Unknown error"));
+                    }
+                } catch (e) { 
+                    console.error("Polling error:", e); 
+                }
+            }, 3000);
+        }
+
+        function renderUI(data) {
+            document.getElementById('loadingStatus').style.display = 'none';
+            document.getElementById('uploadBtn').disabled = false;
+            
+            if (data.projectSummary) {
+                document.getElementById('project-summary-card').style.display = 'block';
+                document.getElementById('project-summary-text').innerText = data.projectSummary;
+            }
+
+            if (data.fileDetails && data.fileDetails.length > 0) {
+                document.getElementById('file-analysis-container').style.display = 'block';
+                document.getElementById('file-list').innerHTML = data.fileDetails.map(f => `
+                    <div class="file-card">
+                        <div class="file-header">
+                            <span class="file-name">${f.filename}</span>
+                            <button class="see-code-btn" onclick="openCodeViewer('${f.filename}')">See Code</button>
+                        </div>
+                        <p class="file-summary">${f.summary || "Summary generation in progress..."}</p>
+                        <div>
+                            ${f.reads && f.reads.length > 0 ? f.reads.map(r => `<span class="op-tag read-tag">Read: ${r}</span>`).join('') : ''}
+                            ${f.writes && f.writes.length > 0 ? f.writes.map(w => `<span class="op-tag write-tag">Write: ${w}</span>`).join('') : ''}
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            renderGraph(data);
+            document.getElementById('results').innerText = JSON.stringify(data, null, 2);
+            document.getElementById('results').style.display = 'block';
+        }
+
+        function openCodeViewer(filename) {
+            const modal = document.getElementById('codeModal');
+            const content = globalData.sourceFiles[filename];
+            const highlights = globalData.highlights[filename] || { readLines: [], writeLines: [] };
+            
+            if (!content) {
+                alert("Source code not available for this file.");
+                return;
+            }
+
+            document.getElementById('modalFilename').innerText = filename;
+            const lines = content.split('\n');
+            document.getElementById('codeViewer').innerHTML = lines.map((l, i) => {
+                const ln = i + 1;
+                let cls = "";
+                if (highlights.readLines && highlights.readLines.includes(ln)) cls = "hl-read";
+                else if (highlights.writeLines && highlights.writeLines.includes(ln)) cls = "hl-write";
+                
+                const escapedLine = l.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                return `<div class="line ${cls}"><span class="line-number">${ln}</span>${escapedLine || ' '}</div>`;
+            }).join('');
+            
+            modal.style.display = 'block';
+        }
+
+        function closeModal() { 
+            document.getElementById('codeModal').style.display = 'none'; 
+        }
+
+        function renderGraph(data) {
+            document.getElementById('viz-container').style.display = 'block';
+            const g = new dagreD3.graphlib.Graph().setGraph({ rankdir: "LR", marginx: 40, marginy: 40 });
+            
+            if (data.lineage) {
+                data.lineage.forEach(item => {
+                    g.setNode(item.file, { label: item.file, class: "file", padding: 15 });
+                    item.reads.forEach(t => { 
+                        g.setNode(t, { label: t, class: "table" }); 
+                        g.setEdge(t, item.file, { label: "READ" }); 
+                    });
+                    item.writes.forEach(t => { 
+                        g.setNode(t, { label: t, class: "table" }); 
+                        g.setEdge(item.file, t, { label: "WRITE" }); 
+                    });
+                });
+            }
+            
+            const svg = d3.select("#svg-canvas"), inner = svg.select("g");
+            inner.selectAll("*").remove(); 
+            new dagreD3.render()(inner, g);
+            svg.call(d3.zoom().on("zoom", () => inner.attr("transform", d3.event.transform)));
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('codeModal');
+            if (event.target == modal) closeModal();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+[0m[[0m[33mwarn[0m] [0m[0m/Users/hardikagrawal/Documents/capstone/agents/Scala-agent/agent-analyzer/src/main/scala/parser/ScalaAstParser.scala:20:7: match may not be exhaustive.[0m
+[0m[[0m[33mwarn[0m] [0m[0mIt would fail on the following inputs: Error(), Success()[0m
+[0m[[0m[33mwarn[0m] [0m[0m      source match {[0m
+[0m[[0m[33mwarn[0m] [0m[0m      ^[0m
+[0m[[0m[33mwarn[0m] [0m[0m1 deprecation; re-run with -deprecation for details[0m
+[0m[[0m[33mwarn[0m] [0m[0mtwo warnings found[0m

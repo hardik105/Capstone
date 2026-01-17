@@ -1,0 +1,7 @@
+[0m[[0m[0mdebug[0m] [0m[0mnot up to date. inChanged = true, force = false[0m
+[0m[[0m[0mdebug[0m] [0m[0mUpdating ProjectRef(uri("file:/Users/hardikagrawal/Documents/capstone/agents/Scala-agent/agent-analyzer/project/"), "agent-analyzer-build")...[0m
+[0m[[0m[0minfo[0m] [0m[0mUpdating agent-analyzer-build[0m
+[0m[[0m[0minfo[0m] [0m[0mResolved agent-analyzer-build dependencies[0m
+[0m[[0m[0minfo[0m] [0m[0mFetching artifacts of agent-analyzer-build[0m
+[0m[[0m[0minfo[0m] [0m[0mFetched artifacts of agent-analyzer-build[0m
+[0m[[0m[0mdebug[0m] [0m[0mDone updating ProjectRef(uri("file:/Users/hardikagrawal/Documents/capstone/agents/Scala-agent/agent-analyzer/project/"), "agent-analyzer-build")[0m
