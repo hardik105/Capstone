@@ -9,7 +9,6 @@ def clean_json_response(raw_text):
     if isinstance(raw_text, dict):
         return raw_text
     try:
-        # Robust extraction for JSON content between the first { and last }
         match = re.search(r'(\{.*\})', str(raw_text), re.DOTALL)
         if match:
             return json.loads(match.group(1))
@@ -45,21 +44,25 @@ def get_project_summary(all_files, lineage_data, language, project_context):
 
 def get_all_file_details_one_shot(files, lineage, project_summary, language):
     """
-    Phase 2 (Optimized): Analyzes ALL code files in a single LLM request.
-    This method stays well within Free Tier rate limits (RPM/TPM) by batching data.
+    Phase 2 (Optimized): Analyzes ALL uploaded files in a single LLM request.
+    Iterates over 'files' instead of 'lineage' to include README and build.sbt.
     """
     full_code_context = ""
-    for entry in lineage:
-        # Find the content for the specific file mentioned in lineage data
-        f_data = next((f for f in files if f["filename"] == entry["file"]), None)
-        if f_data:
-            # Number the lines to allow the LLM to identify accurate indices for highlighting
-            numbered = "\n".join([f"{i+1}: {l}" for i, l in enumerate(f_data["content"].split('\n'))])
-            full_code_context += f"""
+    
+    # NEW: Iterate over every file in the upload, not just lineage-detected files
+    for f_data in files:
+        name = f_data["filename"]
+        # Find lineage entry if it exists for this file
+        entry = next((item for item in lineage if item["file"] == name), 
+                     {"file": name, "reads": [], "writes": []})
+        
+        # Number lines for precise highlighting logic
+        numbered = "\n".join([f"{i+1}: {l}" for i, l in enumerate(f_data["content"].split('\n'))])
+        full_code_context += f"""
 ---
-FILE: {entry['file']}
-EXPECTED READS: {entry['reads']}
-EXPECTED WRITES: {entry['writes']}
+FILE: {name}
+EXPECTED READS: {entry.get('reads', [])}
+EXPECTED WRITES: {entry.get('writes', [])}
 CODE:
 {numbered}
 """
@@ -69,16 +72,16 @@ CODE:
     LANGUAGE: {language}
 
     TASK:
-    Analyze the {len(lineage)} files provided below. For EACH file, determine:
-    1. A concise 2-sentence summary of its logic.
-    2. The EXACT line numbers where 'READ' operations (e.g., spark.read.table) occur for expected tables.
-    3. The EXACT line numbers where 'WRITE' operations (e.g., saveAsTable) occur for expected tables.
+    Analyze the {len(files)} files provided below. For EACH file:
+    1. Provide a concise 2-sentence summary of its role in the project.
+    2. For configuration files (like build.sbt) or documentation (README.md), explain what they manage or document.
+    3. Identify EXACT line numbers for 'READ' and 'WRITE' operations for code files based on the 'EXPECTED' hints.
 
     CRITICAL: Return ONLY a valid JSON object with a single root key "results".
     Format:
     {{
       "results": {{
-        "FileName.scala": {{
+        "filename": {{
           "summary": "...",
           "readLines": [2, 3],
           "writeLines": [9]
@@ -90,29 +93,28 @@ CODE:
     {full_code_context}
     """
     
-    # Send the batch prompt to Gemini
     raw_response = call_gemini(prompt)
     response_data = clean_json_response(raw_response)
     batch_results = response_data.get("results", {})
     
-    # Reformat data for frontend visualization and LangGraph state management
     file_details = []
     highlights = {}
     source_files = {}
 
-    for entry in lineage:
-        name = entry["file"]
+    # Final Loop: Process all files for the frontend dashboard
+    for f_data in files:
+        name = f_data["filename"]
         file_analysis = batch_results.get(name, {})
         
-        # Preserve original source code for the modal viewer component
-        orig_file = next((f for f in files if f["filename"] == name), None)
-        source_content = orig_file["content"] if orig_file else ""
+        # Match back with original lineage data for READ/WRITE tags
+        entry = next((item for item in lineage if item["file"] == name), 
+                     {"file": name, "reads": [], "writes": []})
 
         file_details.append({
             "filename": name,
             "summary": file_analysis.get("summary", "Summary generation failed."),
-            "reads": entry["reads"],
-            "writes": entry["writes"]
+            "reads": entry.get("reads", []),
+            "writes": entry.get("writes", [])
         })
 
         highlights[name] = {
@@ -120,7 +122,8 @@ CODE:
             "writeLines": file_analysis.get("writeLines", [])
         }
         
-        source_files[name] = source_content
+        # This fixes the "Source code not available" error
+        source_files[name] = f_data["content"]
 
     return {
         "fileDetails": file_details,

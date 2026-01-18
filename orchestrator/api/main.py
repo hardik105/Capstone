@@ -1,8 +1,11 @@
 import uuid
 import os
+import shutil
+import tempfile
+import git  # Requires: pip install GitPython
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Dict
+from typing import List, Dict, Optional
 from orchestrator.graph.graph import app as graph_app
 
 api = FastAPI(title="Multi-Agent Data Lineage System")
@@ -25,26 +28,60 @@ async def root():
 async def analyze_files(
     language: str, 
     background_tasks: BackgroundTasks, 
-    files: List[UploadFile] = File(...),
-    enhanced: bool = Query(False) # Captures ?enhanced=true/false from frontend
+    files: Optional[List[UploadFile]] = File(None), # Made optional
+    repo_url: Optional[str] = Query(None),          # New Git URL parameter
+    enhanced: bool = Query(False)
 ):
     job_id = str(uuid.uuid4())
-    print(f"📥 Received {len(files)} files. Enhanced: {enhanced}. Job ID: {job_id}")
+    graph_files = []
+
+    # 1. Handle Git Repository (GitHub/Bitbucket)
+    if repo_url:
+        print(f"🌐 Fetching Repository: {repo_url}")
+        temp_repo_dir = tempfile.mkdtemp() # Create isolated workspace
+        try:
+            # Shallow clone for efficiency (latest commit only)
+            git.Repo.clone_from(repo_url, temp_repo_dir, depth=1)
+            
+            # Recursively find relevant project files
+            for root, _, filenames in os.walk(temp_repo_dir):
+                for f in filenames:
+                    if f.endswith((".scala", ".sql", ".hql", ".sbt", ".md")):
+                        file_path = os.path.join(root, f)
+                        # Save relative path to preserve project structure
+                        relative_name = os.path.relpath(file_path, temp_repo_dir)
+                        with open(file_path, "r", encoding="utf-8") as code_file:
+                            graph_files.append({
+                                "filename": relative_name,
+                                "content": code_file.read()
+                            })
+        except Exception as clone_error:
+            shutil.rmtree(temp_repo_dir)
+            raise HTTPException(status_code=400, detail=f"Git Fetch Failed: {str(clone_error)}")
+        finally:
+            shutil.rmtree(temp_repo_dir) # Clean up temp directory
+
+    # 2. Handle standard manual file/folder uploads
+    elif files:
+        for file in files:
+            content = await file.read()
+            graph_files.append({
+                "filename": file.filename,
+                "content": content.decode("utf-8")
+            })
+
+    # Error if no source was provided
+    if not graph_files:
+        raise HTTPException(status_code=400, detail="No valid project files provided.")
+
+    print(f"📥 Processing {len(graph_files)} files. Enhanced: {enhanced}. Job ID: {job_id}")
     
     jobs[job_id] = {
         "status": "processing",
         "language": language,
-        "file_count": len(files),
+        "file_count": len(graph_files),
         "lineage": []
     }
-    
-    graph_files = []
-    for file in files:
-        content = await file.read()
-        graph_files.append({
-            "filename": file.filename,
-            "content": content.decode("utf-8")
-        })
 
     background_tasks.add_task(run_graph_analysis, job_id, language, graph_files, enhanced)
     
@@ -56,24 +93,25 @@ def run_graph_analysis(job_id: str, language: str, graph_files: list, enhanced: 
             "language": language.lower(),
             "files": graph_files,
             "lineage": [],
-            "enhanced_mode": enhanced # Pass the toggle to the graph
+            "enhanced_mode": enhanced 
         }
 
         result = graph_app.invoke(initial_state)
         
-        # Build response payload
+        # Build base response payload
         completed_data = {
             "status": "completed",
             "lineage": result.get("lineage", []),
-            "sourceFiles": result.get("sourceFiles")
+            "sourceFiles": [f["filename"] for f in result.get("files", [])]
         }
 
-        # Only include AI fields if they were actually generated
+        # CRITICAL FIX: Ensure full content and AI data is passed
         if enhanced:
             completed_data.update({
                 "projectSummary": result.get("projectSummary"),
                 "fileDetails": result.get("fileDetails"),
-                "highlights": result.get("highlights")
+                "highlights": result.get("highlights"),
+                "sourceFiles": result.get("sourceFiles")
             })
 
         jobs[job_id].update(completed_data)

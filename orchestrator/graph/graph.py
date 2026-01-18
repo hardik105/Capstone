@@ -29,18 +29,21 @@ workflow.add_node("summarizer", summary_node)
 # Set Entry Point
 workflow.set_entry_point("router")
 
-# Define Routing to Agents
+# Define Multi-Path Routing
+# The lambda extracts the list of paths stored by the router node
 workflow.add_conditional_edges(
     "router",
-    lambda state: state["language"],
+    lambda state: state.get("active_paths", ["unknown"]), 
     {
         "scala": "scala_agent",
         "hivesql": "hivesql_agent",
-        "pyspark": "pyspark_agent"
+        "pyspark": "pyspark_agent",
+        "unknown": "visualizer"
     }
 )
 
-# After agent, always visualize
+# Fan-in: All paths converge at visualizer
+# Parallel agents will finish before this node begins
 workflow.add_edge("scala_agent", "visualizer")
 workflow.add_edge("hivesql_agent", "visualizer")
 workflow.add_edge("pyspark_agent", "visualizer")
@@ -55,7 +58,6 @@ workflow.add_conditional_edges(
     }
 )
 
-# After summarizer, finish
 workflow.add_edge("summarizer", END)
 
 app = workflow.compile()

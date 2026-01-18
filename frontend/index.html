@@ -14,6 +14,12 @@
         .upload-card { max-width: 950px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); margin-bottom: 20px; }
         h2 { color: #007bff; margin-top: 0; }
         .input-group { margin-bottom: 20px; padding: 20px; border: 2px dashed #cbd5e0; border-radius: 8px; text-align: center; background: #fafafa; }
+        
+        /* Language Selection Styles */
+        .select-group { margin-bottom: 20px; text-align: left; display: flex; align-items: center; justify-content: center; gap: 15px; background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .select-label { font-weight: 600; color: #4a5568; font-size: 0.95em; }
+        .styled-select { padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e0; background: white; font-family: 'Inter', sans-serif; cursor: pointer; color: #2d3748; }
+
         .btn { background: #007bff; color: white; border: none; padding: 14px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; width: 100%; transition: background 0.2s; margin-top: 10px; }
         .btn:hover { background: #0056b3; }
         .btn:disabled { background: #a0aec0; cursor: not-allowed; }
@@ -64,12 +70,16 @@
         .loading { color: #3182ce; font-weight: bold; margin-top: 15px; display: none; text-align: center; background: #ebf8ff; padding: 15px; border-radius: 8px; }
         .completion-msg { margin-top: 30px; padding: 15px; background: #f0fff4; border: 1px solid #c6f6d5; border-radius: 8px; color: #2f855a; display: none; text-align: center; font-weight: bold; }
         #results { margin-top: 25px; background: #1a202c; color: #48bb78; padding: 20px; border-radius: 8px; overflow-x: auto; display: none; font-size: 12px; }
+
+        /* Added Styles for Git Integration */
+        .git-input-container { margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
+        .git-input { width: 100%; box-sizing: border-box; margin-top: 10px; }
     </style>
 </head>
 <body>
     <div class="upload-card">
         <h2>🚀 Multi-Agent Data Lineage</h2>
-        <p class="helper-text">Add project folders or individual files. Graph is generated for all runs; Enhanced analysis is optional.</p>
+        <p class="helper-text">Add project folders, individual files, or a Git repository URL.</p>
         
         <div class="input-group">
             <div style="display: flex; justify-content: center; gap: 20px;">
@@ -81,6 +91,22 @@
             </div>
 
             <div id="fileQueue"></div>
+
+            <div class="git-input-container">
+                <span class="select-label">🌐 Analyze from GitHub / Bitbucket URL:</span>
+                <input type="text" id="repoUrl" class="styled-select git-input" 
+                       placeholder="https://github.com/user/repository.git" 
+                       oninput="updateButtonState()">
+            </div>
+
+            <div class="select-group" style="margin-top: 20px;">
+                <span class="select-label">🎯 Target Language:</span>
+                <select id="languageSelect" class="styled-select">
+                    <option value="auto">Auto-Detect (Hybrid)</option>
+                    <option value="scala">Scala</option>
+                    <option value="hivesql">HiveSQL</option>
+                </select>
+            </div>
 
             <div class="toggle-container">
                 <input type="checkbox" id="enhancedAnalysis">
@@ -132,13 +158,12 @@
         function addToQueue(input) {
             const files = Array.from(input.files);
             files.forEach(file => {
-                // Prevent duplicates based on name and size
                 if (!fileQueue.some(f => f.name === file.name && f.size === file.size)) {
                     fileQueue.push(file);
                 }
             });
             updateQueueUI();
-            input.value = ""; // Reset input so same file can be added again if removed
+            input.value = "";
         }
 
         function removeFile(index) {
@@ -146,27 +171,38 @@
             updateQueueUI();
         }
 
+        // Shared function to enable/disable the Analyze button
+        function updateButtonState() {
+            const btn = document.getElementById('uploadBtn');
+            const repoUrl = document.getElementById('repoUrl').value.trim();
+            
+            if (fileQueue.length > 0) {
+                btn.disabled = false;
+                btn.innerText = `Analyze ${fileQueue.length} Files`;
+            } else if (repoUrl !== "") {
+                btn.disabled = false;
+                btn.innerText = `Analyze Repository`;
+            } else {
+                btn.disabled = true;
+                btn.innerText = `Analyze 0 Files`;
+            }
+        }
+
         function updateQueueUI() {
             const queueDiv = document.getElementById('fileQueue');
-            const btn = document.getElementById('uploadBtn');
             
             if (fileQueue.length === 0) {
                 queueDiv.style.display = 'none';
-                btn.disabled = true;
-                btn.innerText = `Analyze 0 Files`;
-                return;
+            } else {
+                queueDiv.style.display = 'block';
+                queueDiv.innerHTML = fileQueue.map((f, index) => `
+                    <div class="file-item">
+                        <span>📄 ${f.name} <small>(${(f.size / 1024).toFixed(1)} KB)</small></span>
+                        <button class="remove-file" onclick="removeFile(${index})" title="Remove file">&times;</button>
+                    </div>
+                `).join('');
             }
-
-            queueDiv.style.display = 'block';
-            btn.disabled = false;
-            btn.innerText = `Analyze ${fileQueue.length} Files`;
-            
-            queueDiv.innerHTML = fileQueue.map((f, index) => `
-                <div class="file-item">
-                    <span>📄 ${f.name} <small>(${(f.size / 1024).toFixed(1)} KB)</small></span>
-                    <button class="remove-file" onclick="removeFile(${index})" title="Remove file">&times;</button>
-                </div>
-            `).join('');
+            updateButtonState();
         }
 
         async function handleUpload() {
@@ -175,6 +211,8 @@
             const timerText = document.getElementById('timerText');
             const completionMsg = document.getElementById('completionStatus');
             const enhanced = document.getElementById('enhancedAnalysis').checked;
+            const selectedLanguage = document.getElementById('languageSelect').value;
+            const repoUrl = document.getElementById('repoUrl').value.trim();
             
             btn.disabled = true;
             loading.style.display = 'block';
@@ -189,22 +227,34 @@
                 timerText.innerText = `Elapsed: ${Math.round((Date.now() - start)/1000)}s`;
             }, 1000);
 
+            // Create Request
             const formData = new FormData();
-            fileQueue.forEach(f => formData.append("files", f));
+            let apiUrl = `http://127.0.0.1:8000/analyze/${selectedLanguage}?enhanced=${enhanced}`;
+            
+            // Logic: If Repo URL is present, use it. Otherwise, use fileQueue.
+            if (repoUrl !== "") {
+                apiUrl += `&repo_url=${encodeURIComponent(repoUrl)}`;
+            } else {
+                fileQueue.forEach(f => formData.append("files", f));
+            }
 
             try {
-                // Pass the enhanced flag as a query parameter
-                const res = await fetch(`http://127.0.0.1:8000/analyze/scala?enhanced=${enhanced}`, { 
-                    method: "POST", 
-                    body: formData 
-                });
+                // If repoUrl exists, body is empty; otherwise it's the files
+                const fetchOptions = {
+                    method: "POST",
+                    body: (repoUrl !== "") ? null : formData
+                };
+
+                const res = await fetch(apiUrl, fetchOptions);
+                if (!res.ok) throw new Error("Server error occurred");
+                
                 const { job_id } = await res.json();
                 pollStatus(job_id, start);
             } catch (e) { 
                 clearInterval(timerInterval);
                 loading.style.display = 'none';
                 btn.disabled = false;
-                alert("Upload failed.");
+                alert("Upload failed: " + e.message);
             }
         }
 

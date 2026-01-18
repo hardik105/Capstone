@@ -2,19 +2,32 @@ from orchestrator.graph.state import GraphState
 
 def language_router(state: GraphState) -> GraphState:
     """
-    Standardizes the selected language and returns the full state dictionary.
-    The actual routing decision is made by the conditional edge in graph.py
-    using the value stored in state["language"].
+    Standardizes language and detects which agent paths to activate.
+    The result is stored in state["active_paths"] for the conditional edge to read.
     """
-    # 1. Normalize the language string to lowercase to prevent routing mismatches
+    # 1. Standardize language input
     lang = state.get("language", "unknown").lower()
-    
-    # 2. Update the state to ensure downstream nodes see the standardized string
     state["language"] = lang
     
-    print(f"\n[Router] 🧭 Language standardized to: {lang}")
-    print(f"[Router] 🚀 Routing flow to corresponding agent...")
+    # 2. Detect existing file types for automatic routing
+    has_scala = any(f["filename"].endswith(".scala") for f in state.get("files", []))
+    has_hive = any(f["filename"].endswith((".sql", ".hql")) for f in state.get("files", []))
     
-    # 3. CRITICAL: Nodes MUST return the entire State dictionary (GraphState).
-    # Returning a plain string like "scala" will cause the graph to crash.
+    print(f"\n[Router] 🧭 Language standardized to: {lang}")
+    
+    # 3. Determine active paths (Parallel Support)
+    active_paths = []
+    if lang == "auto" or lang == "both":
+        if has_scala: active_paths.append("scala")
+        if has_hive: active_paths.append("hivesql")
+    else:
+        # Single language path
+        active_paths.append(lang)
+    
+    # Store the list in state so graph.py can access it
+    state["active_paths"] = active_paths if active_paths else ["unknown"]
+    
+    print(f"[Router] 🚀 Routing flow to: {state['active_paths']}")
+    
+    # CRITICAL FIX: Return the dictionary (State), not a list
     return state

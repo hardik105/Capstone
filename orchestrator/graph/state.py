@@ -1,4 +1,5 @@
-from typing import TypedDict, List, Dict, Optional
+import operator
+from typing import TypedDict, List, Dict, Optional, Any, Annotated
 
 class FileData(TypedDict):
     filename: str
@@ -10,15 +11,21 @@ class LineageData(TypedDict):
     writes: List[str]
 
 class GraphState(TypedDict):
+    # Core Metadata
     language: str
     files: List[FileData]
-    # This is where agents will store the normalized output
-    lineage: Optional[List[LineageData]] 
+    active_paths: List[str]
+    
+    # CRITICAL: Annotated with operator.add handles parallel agent updates
+    lineage: Annotated[List[LineageData], operator.add] 
+    
+    # Visualization
     visualization: Optional[str]
     
-    # --- New Summary & Highlighter Fields ---
-    enhanced_mode: bool  # Toggle for AI summaries
+    # --- Summary & Highlighter Fields ---
+    enhanced_mode: bool  
     projectSummary: Optional[str]
     fileDetails: Optional[List[Dict]]
     highlights: Optional[Dict[str, Dict]]
+    # Dictionary mapping Filename -> Full Code Content
     sourceFiles: Optional[Dict[str, str]]
