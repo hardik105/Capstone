@@ -6,7 +6,7 @@ import scala.util.Try
 
 object LLMClient {
   private val dotenv = Dotenv.configure()
-    .directory(".") // Explicitly looks in agent-analyzer/
+    .directory("../../../") 
     .ignoreIfMalformed()
     .ignoreIfMissing()
     .load()

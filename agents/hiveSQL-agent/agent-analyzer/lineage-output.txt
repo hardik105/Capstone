@@ -1,23 +1,11 @@
-File: daily_archive.sql
-READS: bronze_patients
-WRITES: warehouse.glacier_archive_patients
+File: create_sales_view.sql
+READS: gold.sales_fact, gold.product_dim
+WRITES: analytics.daily_revenue_summary
 
-File: compliance_masking.hql
-READS: bronze_patients
-WRITES: compliance.research_sandboxed_data
+File: maintenance_job.sql
+READS: gold.active_orders
+WRITES: staging.temp_processing
 
-File: billing_enrichment.hql
-READS: silver_vitals_daily, masters.provider_ref_table
-WRITES: gold_patient_billing
-
-File: patient_ingestion.hql
-READS: raw_internal.external_crm_export
-WRITES: bronze_patients
-
-File: anomaly_detection.sql
-READS: silver_vitals_daily
-WRITES: emergency_alerts
-
-File: vitals_aggregation.sql
-READS: streaming.iot_vitals_stream, bronze_patients
-WRITES: silver_vitals_daily
+File: customer_churn_report.hql
+READS: silver.web_traffic
+WRITES: analytics.churn_risk_scores

@@ -1,9 +1,8 @@
 object CleanupUtility {
-  def repair() = {
-    val errors = spark.read.table("ingestion_errors")
-    val repaired = errors.filter("repaired = true")
-    
-    repaired.write.mode("append").saveAsTable("raw_transactions")
-    spark.emptyDataFrame.write.mode("overwrite").saveAsTable("ingestion_errors")
+  def archiveOldData(): Unit = {
+    val spark = SparkSession.builder().getOrCreate()
+    spark.read.table("bronze_logistics")
+      .filter(col("date") < "2024-01-01")
+      .write.saveAsTable("archived_shipments")
   }
 }

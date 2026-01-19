@@ -1,0 +1,11 @@
+File: cleanup_utility.py
+READS: /tmp/staging/daily_batch
+WRITES: s3://archive-zone/backups/daily_batch
+
+File: ingest_web_logs.py
+READS: s3://raw-zone/logs/2026/*
+WRITES: silver.web_traffic
+
+File: sync_crm_data.py
+READS: salesforce.leads
+WRITES: gold.customer_master

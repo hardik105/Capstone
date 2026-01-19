@@ -14,9 +14,12 @@ class GraphState(TypedDict):
     # Core Metadata
     language: str
     files: List[FileData]
+    # active_paths determines which nodes (scala, hivesql, pyspark) the router activates
     active_paths: List[str]
     
-    # CRITICAL: Annotated with operator.add handles parallel agent updates
+    # CRITICAL: Annotated with operator.add handles parallel agent updates.
+    # When scala_agent and pyspark_agent both return a list, LangGraph 
+    # will automatically merge them into this single list.
     lineage: Annotated[List[LineageData], operator.add] 
     
     # Visualization
@@ -27,5 +30,6 @@ class GraphState(TypedDict):
     projectSummary: Optional[str]
     fileDetails: Optional[List[Dict]]
     highlights: Optional[Dict[str, Dict]]
-    # Dictionary mapping Filename -> Full Code Content
+    
+    # Dictionary mapping Filename -> Full Code Content for the UI
     sourceFiles: Optional[Dict[str, str]]

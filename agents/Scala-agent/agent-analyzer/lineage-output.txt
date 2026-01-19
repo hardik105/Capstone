@@ -1,19 +1,7 @@
-File: RiskAnalyzer.scala
-READS: silver_emissions
-WRITES: gold_delivery_risks, delta
+File: StreamingProcessor.scala
+READS: kafka
+WRITES: (none)
 
-File: AuditService.scala
-READS: gold_delivery_risks
-WRITES: compliance_audit_logs
-
-File: CarbonCalculator.scala
-READS: bronze_logistics, carbon_coefficients
-WRITES: silver_emissions
-
-File: CleanupUtility.scala
-READS: bronze_logistics
-WRITES: archived_shipments
-
-File: IngestionEngine.scala
-READS: raw_shipments, s3://partner-logs/daily_v1.json
-WRITES: bronze_logistics
+File: TaxCalculator.scala
+READS: (none)
+WRITES: Calculated Tax: $500

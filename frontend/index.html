@@ -105,6 +105,7 @@
                     <option value="auto">Auto-Detect (Hybrid)</option>
                     <option value="scala">Scala</option>
                     <option value="hivesql">HiveSQL</option>
+                    <option value="pyspark">PySpark</option>
                 </select>
             </div>
 
@@ -209,14 +210,14 @@
             const btn = document.getElementById('uploadBtn');
             const loading = document.getElementById('loadingStatus');
             const timerText = document.getElementById('timerText');
-            const completionMsg = document.getElementById('completionStatus');
+            const completionStatus = document.getElementById('completionStatus');
             const enhanced = document.getElementById('enhancedAnalysis').checked;
             const selectedLanguage = document.getElementById('languageSelect').value;
             const repoUrl = document.getElementById('repoUrl').value.trim();
             
             btn.disabled = true;
             loading.style.display = 'block';
-            completionMsg.style.display = 'none';
+            completionStatus.style.display = 'none';
             document.getElementById('project-summary-card').style.display = 'none';
             document.getElementById('file-analysis-container').style.display = 'none';
             document.getElementById('viz-container').style.display = 'none';

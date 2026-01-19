@@ -46,7 +46,8 @@ async def analyze_files(
             # Recursively find relevant project files
             for root, _, filenames in os.walk(temp_repo_dir):
                 for f in filenames:
-                    if f.endswith((".scala", ".sql", ".hql", ".sbt", ".md")):
+                    # UPDATED: Added ".py" to support PySpark files
+                    if f.endswith((".scala", ".sql", ".hql", ".sbt", ".md", ".py")):
                         file_path = os.path.join(root, f)
                         # Save relative path to preserve project structure
                         relative_name = os.path.relpath(file_path, temp_repo_dir)
