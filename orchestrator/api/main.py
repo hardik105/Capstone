@@ -1,3 +1,6 @@
+import os
+from dotenv import load_dotenv
+load_dotenv() # This must run BEFORE you import the graph_app
 import uuid
 import os
 import shutil
@@ -97,7 +100,10 @@ def run_graph_analysis(job_id: str, language: str, graph_files: list, enhanced: 
             "enhanced_mode": enhanced 
         }
 
-        result = graph_app.invoke(initial_state)
+        result = graph_app.invoke(
+            initial_state,
+            config={"run_name": f"Lineage_Job_{job_id}"}
+        )
         
         # Build base response payload
         completed_data = {
