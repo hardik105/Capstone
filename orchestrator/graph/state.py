@@ -28,7 +28,7 @@ class GraphState(TypedDict):
     # --- Summary & Highlighter Fields ---
     enhanced_mode: bool  
     projectSummary: Optional[str]
-    fileDetails: Optional[List[Dict]]
+    fileDetails: Annotated[List[Dict], operator.add]
     highlights: Optional[Dict[str, Dict]]
     
     # Dictionary mapping Filename -> Full Code Content for the UI

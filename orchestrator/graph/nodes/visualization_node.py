@@ -3,31 +3,45 @@ from orchestrator.graph.state import GraphState
 def visualization_node(state: GraphState) -> GraphState:
     """
     Consolidates lineage results and prepares them for visualization.
-    This node serves as the final checkpoint before the optional AI 
-    Summary & Highlighter phase.
+    Ensures all metadata tags (Reads/Writes) are normalized before
+    moving to the Summary phase.
     """
     print("\n" + "="*40)
-    print("🚀 DATA LINEAGE SUMMARY")
+    print("🚀 CONSOLIDATING MULTI-AGENT RESULTS")
     print("="*40)
 
-    # Lineage data is populated by the Scala/PySpark/Hive agents
+    # 1. Handle Lineage Graph Data (Nodes/Edges)
     lineage = state.get("lineage", [])
     
     if not lineage:
         print("⚠️  No lineage data found. Check agent logs for extraction errors.")
     else:
-        # Log the extracted connections to the terminal for debugging
         for entry in lineage:
             filename = entry.get('file', 'Unknown')
-            reads = entry.get('reads', [])
-            writes = entry.get('writes', [])
-            
-            print(f"📄 File: {filename}")
-            print(f"   📥 Reads:  {', '.join(reads) or '(none)'}")
-            print(f"   📤 Writes: {', '.join(writes) or '(none)'}")
-    
+            # Normalize list access
+            r_count = len(entry.get('reads', []))
+            w_count = len(entry.get('writes', []))
+            print(f"📊 {filename}: {r_count} Reads, {w_count} Writes")
+
+    # 2. SANITIZATION: Fix the missing Read/Write tags issue
+    # We explicitly map potential naming variations from different LLM prompts
+    raw_details = state.get("fileDetails") or []
+    sanitized_details = []
+
+    for item in raw_details:
+        sanitized_details.append({
+            "filename": item.get("filename"),
+            "summary": item.get("summary", "Analysis complete."),
+            # Fallback for agents that might use 'inputs' or 'sources'
+            "reads": item.get("reads") or item.get("inputs") or item.get("sources") or [],
+            "writes": item.get("writes") or item.get("outputs") or item.get("targets") or []
+        })
+
+    print(f"✅ Processed {len(sanitized_details)} file analysis records.")
     print("="*40 + "\n")
     
-    # We return the state as-is. 
-    # The 'lineage' key here is what index.html uses to draw the D3 nodes/edges.
-    return state
+    # Return the updated state with sanitized fileDetails
+    return {
+        **state,
+        "fileDetails": sanitized_details
+    }
